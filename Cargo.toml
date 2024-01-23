@@ -1,0 +1,11 @@
+[package]
+name = "ip-location-db-lookup"
+version = "0.1.0"
+authors = ["Elvyria <elvyria@tutanota.com>"]
+repository = "https://github.com/Elvyria/ip-location-db-lookup"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+memmap2 = "0.9"
