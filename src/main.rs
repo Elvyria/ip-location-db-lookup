@@ -1,33 +1,47 @@
 mod cheat;
 
-use std::{net::Ipv4Addr, str::FromStr, path::Path, fs::File, ops::Range};
+use std::path::PathBuf;
+use std::{net::Ipv4Addr, str::FromStr, fs::File, ops::Range};
 use std::sync::{Mutex, Arc};
-use std::io::{Write, Cursor};
+use std::io::{Cursor, Write};
 
 use anyhow::Error;
+use argh::FromArgs;
 use memmap2::Mmap;
 
-use crate::cheat::*;
+#[derive(FromArgs)]
+///
+struct Args {
+    #[argh(positional, arg_name = "[DATABASE]", greedy)]
+    db: PathBuf,
 
-fn usage() {
-    println!("Usage: {} [.../dbip-country-ipv4-num.csv] [IPv4]", env!("CARGO_BIN_NAME"));
+    #[argh(positional, arg_name = "[IPv4]", greedy)]
+    ip: String,
+
+    /// amount of workers (default: 1)
+    #[argh(option, default = "1", short = 'w', long = "workers")]
+    workers: usize,
 }
 
 fn main() -> Result<(), Error> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Args = argh::from_env();
 
-    if args.len() != 2 { usage() }
+    let ip = Ipv4Addr::from_str(&args.ip)?;
+    let file = File::open(args.db)?;
 
-    let path = Path::new(&args[0]);
-    let ip = Ipv4Addr::from_str(&args[1])?;
-
-    let file = File::open(path)?;
-
-    let mmap: Mmap = unsafe { Mmap::map(&file).unwrap() };
+    let mmap: Mmap = unsafe { Mmap::map(&file)? };
     let b: &[u8] = &mmap;
 
-    let country = parallel(b, &ip, 0)?;
-    println!("{}", country.unwrap());
+    let data = if args.workers == 1 {
+        lookup_ipv4(b, &ip)
+    } else {
+        parallel(b, &ip, args.workers)
+    }?;
+
+    match data {
+        Some(s) => println!("{s}"),
+        None => todo!(),
+    }
 
     Ok(())
 }
@@ -56,9 +70,9 @@ fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option
 }
 
 fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
-    let size = b.len() / workers;
-
     const NEWLINES: [u8; 16] = [b'\n'; 16];
+
+    let size = b.len() / workers;
 
     let mut start: usize = 0;
 
@@ -67,11 +81,12 @@ fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
 
         if end > b.len() || size == b.len() { return start..b.len() }
 
-        let mut nl_mask = mask(&b[end..(end + 16).min(b.len())], &NEWLINES) as u16;
         let mut nl: usize = 0;
-        if nl_mask == 0 {
-            nl_mask = mask(&b[end + 16..end + 32], &NEWLINES) as u16;
+        let mut nl_mask = mask(&b[end..(end + 16).min(b.len())], &NEWLINES) as u16;
+
+        while nl_mask == 0 {
             nl += 16;
+            nl_mask = mask(&b[end + nl..(end + 16 + nl).min(b.len())], &NEWLINES) as u16;
         }
 
         nl += nl_mask.trailing_zeros() as usize;
@@ -100,21 +115,26 @@ fn lookup_ipv4<'a>(mut b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Er
     const NEWLINES: [u8; 16] = [b'\n'; 16];
 
     while !b.is_empty() {
-        let nl_mask = mask(unsafe { b.get_unchecked(9..MAX_LINE_LEN.min(b.len())) }, &NEWLINES);
-        let nl: usize = MIN_LINE_LEN - 1 + (nl_mask >> 11).trailing_zeros() as usize;
+        let mut nl: usize = 0;
+        let mut nl_mask = mask(unsafe { b.get_unchecked(9..25) }, &NEWLINES);
+
+        while nl_mask == 0 {
+            nl += 16;
+            nl_mask = mask(unsafe { b.get_unchecked(9 + nl..(25 + nl)) }, &NEWLINES);
+        }
+
+        nl += 9 + nl_mask.trailing_zeros() as usize;
 
         let num_mask: u32 = mask(unsafe { b.get_unchecked(..16) }, &ip_buf).reverse_bits();
 
         if num_mask.leading_ones() >= best_mask.leading_ones() || num_mask > best_mask {
             best_mask = num_mask;
 
-            let country = confirm(&b[..nl], ip_num);
-            if country.is_some() {
-                return Ok(country);
-            }
+            let country = value(unsafe { b.get_unchecked(..=nl) }, ip_num);
+            if country.is_some() { return Ok(country); }
         }
 
-        b = &b[nl + 1..];
+        b = unsafe { b.get_unchecked(nl + 1..) };
     }
 
     Ok(None)
@@ -162,18 +182,27 @@ fn mask(a: &[u8], b: &[u8]) -> u32 {
     }
 }
 
-fn confirm(b: &[u8], n: u32) -> Option<&str> {
-    const COMMAS: [u8; 4] = [0, 0, b',', b','];
+fn value(b: &[u8], n: u32) -> Option<&str> {
+    const COMMAS: [u8; 16] = [b','; 16];
 
-    let s = std::str::from_utf8(b).ok()?;
+    unsafe {
+        let mask = mask(b.get_unchecked(6..21), &COMMAS);
 
-    let mask = mask(&b[7..11], &COMMAS) as u8;
-    let offset: usize = 8  + (mask >> 2) as usize;
+        let first: usize = 6 + mask.trailing_zeros() as usize;
+        let second: usize = first + 1 + (mask >> (first - 5)).trailing_zeros() as usize;
 
-    let min = u32::from_str(&s[..offset]).ok()?;
-    let max = u32::from_str(&s[offset + 1..b.len() - 3]).ok()?;
+        let s = std::str::from_utf8_unchecked(b);
 
-    if (min..=max).contains(&n) { Some(&s[s.len() - 2..]) } else { None }
+        let min = u32::from_str(s.get_unchecked(..first)).unwrap_unchecked();
+        let max = u32::from_str(s.get_unchecked(first + 1..second)).unwrap_unchecked();
+
+        // do not reorder
+        if min > n || n > max {
+            None
+        } else {
+            Some(s.get_unchecked(second + 1..b.len() - 1))
+        }
+    }
 }
 
 #[cfg(test)]

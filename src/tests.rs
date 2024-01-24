@@ -1,6 +1,6 @@
 use anyhow::Error;
 
-const IPV4_NUM: &str = r#"16777216,16777471,AU
+const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 16777472,16778239,CN
 16778240,16779263,AU
 16779264,16781311,CN
@@ -31,11 +31,11 @@ const IPV4_NUM: &str = r#"16777216,16777471,AU
 "#;
 
 #[test]
-fn test_ipv4() -> Result<(), Error> {
+fn test_city_ipv4() -> Result<(), Error> {
     use std::net::Ipv4Addr;
     use crate::lookup_ipv4;
 
-    let b = IPV4_NUM.as_bytes();
+    let b = IPV4_COUNTRY_NUM.as_bytes();
 
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 0))?, Some("AU"));
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 255))?, Some("AU"));
