@@ -61,7 +61,7 @@ fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option
         chunks(b, workers).for_each(|r| {
             s.spawn({
                 let tx = tx.clone();
-                move || tx.send(lookup_ipv4_num(&b[r], ip_num, &ip_buf).ok().flatten())
+                move || tx.send(lookup_ipv4_num(&b[r], ip_num, &ip_buf))
             });
         });
 
@@ -105,10 +105,10 @@ fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error>
         c.into_inner()
     };
 
-    lookup_ipv4_num(b, ip_num, &ip_buf)
+    Ok(lookup_ipv4_num(b, ip_num, &ip_buf))
 }
 
-fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Result<Option<&'a str>, Error> {
+fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Option<&'a str> {
     let mut best_mask: u32 = 0;
 
     while !b.is_empty() {
@@ -121,14 +121,14 @@ fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Result<Op
                 best_mask = num_mask;
 
                 let v = value(b.get_unchecked(..=nl), ip_num);
-                if v.is_some() { return Ok(v); }
+                if v.is_some() { return v; }
             }
 
             b = b.get_unchecked(nl + 1..);
         }
     }
 
-    Ok(None)
+    None
 }
 
 fn find_nl(b: &[u8]) -> usize {
