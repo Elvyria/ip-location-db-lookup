@@ -31,7 +31,7 @@ const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 "#;
 
 #[test]
-fn test_city_ipv4() -> Result<(), Error> {
+fn country_ipv4() -> Result<(), Error> {
     use std::net::Ipv4Addr;
     use crate::lookup_ipv4;
 

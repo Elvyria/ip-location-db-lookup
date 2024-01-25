@@ -1,8 +1,5 @@
-mod cheat;
-
 use std::path::PathBuf;
 use std::{net::Ipv4Addr, str::FromStr, fs::File, ops::Range};
-use std::sync::{Mutex, Arc};
 use std::io::{Cursor, Write};
 
 use anyhow::Error;
@@ -10,7 +7,7 @@ use argh::FromArgs;
 use memmap2::Mmap;
 
 #[derive(FromArgs)]
-///
+/// Offline IP address lookup tool.
 struct Args {
     #[argh(positional, arg_name = "[DATABASE]", greedy)]
     db: PathBuf,
@@ -49,58 +46,6 @@ fn main() -> Result<(), Error> {
 fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option<&'a str>, Error> {
     if workers == 0 { workers = std::thread::available_parallelism()?.get(); }
 
-    let result = Arc::new(Mutex::new(None));
-
-    std::thread::scope(|s| {
-        chunks(b, workers).for_each(|r| {
-            let result = result.clone();
-            s.spawn(move || {
-                if let Some(country) = lookup_ipv4(&b[r], ip).ok().flatten() {
-                    let mut lock = result.lock().unwrap();
-                    *lock = Some(country);
-                }
-            });
-        })
-    });
-
-    let m = Arc::try_unwrap(result).unwrap();
-    let inner = m.into_inner().unwrap();
-
-    Ok(inner)
-}
-
-fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
-    const NEWLINES: [u8; 16] = [b'\n'; 16];
-
-    let size = b.len() / workers;
-
-    let mut start: usize = 0;
-
-    (0..workers).map(move |_| {
-        let end = start + size;
-
-        if end > b.len() || size == b.len() { return start..b.len() }
-
-        let mut nl: usize = 0;
-        let mut nl_mask = mask(&b[end..(end + 16).min(b.len())], &NEWLINES) as u16;
-
-        while nl_mask == 0 {
-            nl += 16;
-            nl_mask = mask(&b[end + nl..(end + 16 + nl).min(b.len())], &NEWLINES) as u16;
-        }
-
-        nl += nl_mask.trailing_zeros() as usize;
-
-        if nl != 0 {
-            start += size + nl + 1;
-            return end - size..end + nl + 1
-        }
-
-        start..b.len()
-    })
-}
-
-fn lookup_ipv4<'a>(mut b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
     let ip_num = ipv4_num(ip);
     let ip_buf = {
         let mut c = Cursor::new([0u8; 16]);
@@ -110,34 +55,97 @@ fn lookup_ipv4<'a>(mut b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Er
         c.into_inner()
     };
 
+    let (tx, rx) = std::sync::mpsc::channel::<Option<&'a str>>();
+
+    std::thread::scope(|s| {
+        chunks(b, workers).for_each(|r| {
+            s.spawn({
+                let tx = tx.clone();
+                move || tx.send(lookup_ipv4_num(&b[r], ip_num, &ip_buf).ok().flatten())
+            });
+        });
+
+        for _ in 0..workers {
+            let data = rx.recv().unwrap();
+            if data.is_some() { return Ok(data); }
+        }
+
+        Ok(None)
+    })
+}
+
+fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
+    let size = b.len() / workers;
+
+    let mut start: usize = 0;
+
+    (0..workers).map(move |_| {
+        let end = start + size;
+
+        if end + size < b.len() {
+            let nl = find_nl(&b[end..]);
+
+            if nl != 0 {
+                start += size + nl + 1;
+                return end - size..end + nl + 1
+            }
+        }
+
+        start..b.len()
+    })
+}
+
+fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
+    let ip_num = ipv4_num(ip);
+    let ip_buf = {
+        let mut c = Cursor::new([0u8; 16]);
+
+        write!(&mut c, "{ip_num},")?;
+
+        c.into_inner()
+    };
+
+    lookup_ipv4_num(b, ip_num, &ip_buf)
+}
+
+fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Result<Option<&'a str>, Error> {
     let mut best_mask: u32 = 0;
 
-    const NEWLINES: [u8; 16] = [b'\n'; 16];
-
     while !b.is_empty() {
-        let mut nl: usize = 0;
-        let mut nl_mask = mask(unsafe { b.get_unchecked(9..25) }, &NEWLINES);
+        unsafe {
+            let nl = find_nl(b);
 
-        while nl_mask == 0 {
-            nl += 16;
-            nl_mask = mask(unsafe { b.get_unchecked(9 + nl..(25 + nl)) }, &NEWLINES);
+            let num_mask: u32 = mask_128(b.get_unchecked(..16), ip_buf).reverse_bits();
+
+            if num_mask.leading_ones() >= best_mask.leading_ones() || num_mask > best_mask {
+                best_mask = num_mask;
+
+                let v = value(b.get_unchecked(..=nl), ip_num);
+                if v.is_some() { return Ok(v); }
+            }
+
+            b = b.get_unchecked(nl + 1..);
         }
-
-        nl += 9 + nl_mask.trailing_zeros() as usize;
-
-        let num_mask: u32 = mask(unsafe { b.get_unchecked(..16) }, &ip_buf).reverse_bits();
-
-        if num_mask.leading_ones() >= best_mask.leading_ones() || num_mask > best_mask {
-            best_mask = num_mask;
-
-            let country = value(unsafe { b.get_unchecked(..=nl) }, ip_num);
-            if country.is_some() { return Ok(country); }
-        }
-
-        b = unsafe { b.get_unchecked(nl + 1..) };
     }
 
     Ok(None)
+}
+
+fn find_nl(b: &[u8]) -> usize {
+    const NEWLINES: [u8; 32] = [b'\n'; 32];
+
+    let mut nl: usize = 9;
+    let mut nl_mask: u32 = mask_128(unsafe { b.get_unchecked(nl..nl + 16) }, &NEWLINES[..16]);
+
+    nl += (nl_mask as u16).trailing_zeros() as usize;
+
+    while nl_mask == 0 {
+        if nl + 32 > b.len() { return b.len() - 1 }
+        nl_mask = mask_256(unsafe { b.get_unchecked(nl..nl + 32) }, &NEWLINES);
+        nl += nl_mask.trailing_zeros() as usize;
+    }
+
+    nl
 }
 
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
@@ -162,11 +170,31 @@ fn ipv4_num(ip: &Ipv4Addr) -> u32 {
     }
 }
 
+// a: [u8; 32] = [1, 2, 3, 4, ...]
+// b: [u8; 32] = [1, 4, 3, 2, ...]
+// >>>>>>>>>>>   [1, 0, 1, 0, ...]
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+fn mask_256(a: &[u8], b: &[u8]) -> u32 {
+
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    unsafe {
+        let a = _mm256_loadu_si256(a as *const _ as *const _);
+        let b = _mm256_loadu_si256(b as *const _ as *const _);
+
+        let cmp = _mm256_cmpeq_epi8(a, b);
+        _mm256_movemask_epi8(cmp) as u32
+    }
+}
+
 // a: [u8; 16] = [1, 2, 3, 4, ...]
 // b: [u8; 16] = [1, 4, 3, 2, ...]
 // >>>>>>>>>>>   [1, 0, 1, 0, ...]
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
-fn mask(a: &[u8], b: &[u8]) -> u32 {
+fn mask_128(a: &[u8], b: &[u8]) -> u32 {
 
     #[cfg(target_arch = "x86")]
     use std::arch::x86::*;
@@ -186,7 +214,7 @@ fn value(b: &[u8], n: u32) -> Option<&str> {
     const COMMAS: [u8; 16] = [b','; 16];
 
     unsafe {
-        let mask = mask(b.get_unchecked(6..21), &COMMAS);
+        let mask = mask_128(b.get_unchecked(6..21), &COMMAS);
 
         let first: usize = 6 + mask.trailing_zeros() as usize;
         let second: usize = first + 1 + (mask >> (first - 5)).trailing_zeros() as usize;
