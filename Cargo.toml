@@ -7,6 +7,6 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
-anyhow = "1"
+thiserror = "1.0"
 argh = "0.1"
 memmap2 = "0.9"

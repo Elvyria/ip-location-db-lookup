@@ -1,9 +1,11 @@
+mod error;
+
 use std::path::PathBuf;
 use std::{net::Ipv4Addr, str::FromStr, fs::File, ops::Range};
 use std::io::{Cursor, Write};
 
-use anyhow::Error;
 use argh::FromArgs;
+use error::Error;
 use memmap2::Mmap;
 
 #[derive(FromArgs)]
@@ -23,10 +25,10 @@ struct Args {
 fn main() -> Result<(), Error> {
     let args: Args = argh::from_env();
 
-    let ip = Ipv4Addr::from_str(&args.ip)?;
-    let file = File::open(args.db)?;
+    let ip = Ipv4Addr::from_str(&args.ip).map_err(Error::IP)?;
+    let file = File::open(args.db).map_err(Error::FileOpen)?;
 
-    let mmap: Mmap = unsafe { Mmap::map(&file)? };
+    let mmap: Mmap = unsafe { Mmap::map(&file).map_err(Error::Mmap)? };
     let b: &[u8] = &mmap;
 
     let data = if args.workers == 1 {
@@ -36,21 +38,24 @@ fn main() -> Result<(), Error> {
     }?;
 
     match data {
-        Some(s) => println!("{s}"),
-        None => todo!(),
-    }
+        Some(s) => {
+            let mut stdout = std::io::stdout().lock();
+            unsafe { stdout.write_all(s.as_bytes()).unwrap_unchecked(); }
 
-    Ok(())
+            Ok(())
+        },
+        None => Err(Error::NotFound),
+    }
 }
 
 fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option<&'a str>, Error> {
-    if workers == 0 { workers = std::thread::available_parallelism()?.get(); }
+    if workers == 0 { workers = std::thread::available_parallelism().map_err(Error::Workers)?.get(); }
 
     let ip_num = ipv4_num(ip);
-    let ip_buf = {
+    let ip_buf = unsafe {
         let mut c = Cursor::new([0u8; 16]);
 
-        write!(&mut c, "{ip_num},")?;
+        write!(&mut c, "{ip_num},").unwrap_unchecked();
 
         c.into_inner()
     };
@@ -66,7 +71,7 @@ fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option
         });
 
         for _ in 0..workers {
-            let data = rx.recv().unwrap();
+            let data = unsafe { rx.recv().unwrap_unchecked() };
             if data.is_some() { return Ok(data); }
         }
 
@@ -97,10 +102,10 @@ fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
 
 fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
     let ip_num = ipv4_num(ip);
-    let ip_buf = {
+    let ip_buf = unsafe {
         let mut c = Cursor::new([0u8; 16]);
 
-        write!(&mut c, "{ip_num},")?;
+        write!(&mut c, "{ip_num},").unwrap_unchecked();
 
         c.into_inner()
     };
