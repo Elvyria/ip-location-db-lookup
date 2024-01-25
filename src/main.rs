@@ -113,9 +113,9 @@ fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Result<Op
 
     while !b.is_empty() {
         unsafe {
-            let nl = find_nl(b);
-
             let num_mask: u32 = mask_128(b.get_unchecked(..16), ip_buf).reverse_bits();
+
+            let nl = find_nl(b);
 
             if num_mask.leading_ones() >= best_mask.leading_ones() || num_mask > best_mask {
                 best_mask = num_mask;
