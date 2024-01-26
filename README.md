@@ -1,5 +1,5 @@
 # ip-location-db-lookup
-![Toolchain: Stable](https://img.shields.io/badge/Toolchain-Stable-%23D0F0C0) [![License: MIT](https://img.shields.io/badge/License-MIT-%23F0E68C)](https://opensource.org/licenses/MIT) 
+![Toolchain: Stable](https://img.shields.io/badge/Toolchain-Nightly-%23E6E6FA) [![License: MIT](https://img.shields.io/badge/License-MIT-%23F0E68C)](https://opensource.org/licenses/MIT) 
 
 Offline command line utility for IP address look-up through CSV databases from [ip-location-db](https://github.com/sapics/ip-location-db) project.
 

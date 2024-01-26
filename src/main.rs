@@ -1,8 +1,16 @@
+#![feature(portable_simd)]
+#![feature(core_intrinsics)]
+
 mod error;
 
+use std::intrinsics::unlikely;
 use std::path::PathBuf;
+use std::simd::num::SimdUint;
 use std::{net::Ipv4Addr, str::FromStr, fs::File, ops::Range};
 use std::io::{Cursor, Write};
+
+use std::simd::Simd;
+use std::simd::cmp::SimdPartialEq;
 
 use argh::FromArgs;
 use error::Error;
@@ -126,7 +134,7 @@ fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Option<&'
                 best_mask = num_mask;
 
                 let v = value(b.get_unchecked(..=nl), ip_num);
-                if v.is_some() { return v; }
+                if unlikely(v.is_some()) { return v; }
             }
 
             b = b.get_unchecked(nl + 1..);
@@ -145,7 +153,7 @@ fn find_nl(b: &[u8]) -> usize {
     nl += (nl_mask as u16).trailing_zeros() as usize;
 
     while nl_mask == 0 {
-        if nl + 32 > b.len() { return b.len() - 1 }
+        if unlikely(nl + 32 > b.len()) { return b.len() - 1 }
         nl_mask = mask_256(unsafe { b.get_unchecked(nl..nl + 32) }, &NEWLINES);
         nl += nl_mask.trailing_zeros() as usize;
     }
@@ -153,66 +161,25 @@ fn find_nl(b: &[u8]) -> usize {
     nl
 }
 
-#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 fn ipv4_num(ip: &Ipv4Addr) -> u32 {
+    let octets: Simd<u32, 4> = Simd::from_array(ip.octets().map(u32::from));
+    const MUL:  Simd<u32, 4> = Simd::from_array([16777216, 65536, 256, 1]);
 
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    let octets = ip.octets().map(u32::from);
-    const MUL: [u32; 4] = [16777216, 65536, 256, 1];
-
-    unsafe {
-        let a = _mm_loadu_si128(&octets as *const _ as *const _);
-        let b = _mm_load_si128(&MUL as *const _ as *const _);
-
-        let mul = _mm_mullo_epi32(a, b);
-        let mul = std::mem::transmute::<_, [u32; 4]>(mul);
-
-        mul.iter().sum()
-    }
+    (octets * MUL).reduce_sum()
 }
 
-// a: [u8; 32] = [1, 2, 3, 4, ...]
-// b: [u8; 32] = [1, 4, 3, 2, ...]
-// >>>>>>>>>>>   [1, 0, 1, 0, ...]
-#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 fn mask_256(a: &[u8], b: &[u8]) -> u32 {
+    let a: Simd<u8, 32> = Simd::from_slice(a);
+    let b: Simd<u8, 32> = Simd::from_slice(b);
 
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    unsafe {
-        let a = _mm256_loadu_si256(a as *const _ as *const _);
-        let b = _mm256_loadu_si256(b as *const _ as *const _);
-
-        let cmp = _mm256_cmpeq_epi8(a, b);
-        _mm256_movemask_epi8(cmp) as u32
-    }
+    a.simd_eq(b).to_bitmask() as u32
 }
 
-// a: [u8; 16] = [1, 2, 3, 4, ...]
-// b: [u8; 16] = [1, 4, 3, 2, ...]
-// >>>>>>>>>>>   [1, 0, 1, 0, ...]
-#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 fn mask_128(a: &[u8], b: &[u8]) -> u32 {
+    let a: Simd<u8, 16> = Simd::from_slice(a);
+    let b: Simd<u8, 16> = Simd::from_slice(b);
 
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    unsafe {
-        let a = _mm_loadu_si128(a as *const _ as *const _);
-        let b = _mm_loadu_si128(b as *const _ as *const _);
-
-        let cmp = _mm_cmpeq_epi8(a, b);
-        _mm_movemask_epi8(cmp) as u32
-    }
+    a.simd_eq(b).to_bitmask() as u32
 }
 
 fn value(b: &[u8], n: u32) -> Option<&str> {
