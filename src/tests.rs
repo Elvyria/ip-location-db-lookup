@@ -1,4 +1,4 @@
-use anyhow::Error;
+use crate::Error;
 
 const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 16777472,16778239,CN
