@@ -219,7 +219,7 @@ fn value(b: &[u8], n: u32) -> Option<&str> {
     const COMMAS: [u8; 16] = [b','; 16];
 
     unsafe {
-        let mask = mask_128(b.get_unchecked(6..21), &COMMAS);
+        let mask = mask_128(b.get_unchecked(6..6 + 16), &COMMAS);
 
         let first: usize = 6 + mask.trailing_zeros() as usize;
         let second: usize = first + 1 + (mask >> (first - 5)).trailing_zeros() as usize;
