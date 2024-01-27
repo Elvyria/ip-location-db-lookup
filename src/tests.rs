@@ -1,4 +1,4 @@
-use crate::{into_num64, Error};
+use crate::Error;
 
 const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 16777472,16778239,CN
@@ -52,7 +52,9 @@ fn country_ipv4() -> Result<(), Error> {
 
 #[test]
 fn str_to_num() {
-    assert_eq!(into_num64(b"16777216"),   16777216);
-    assert_eq!(into_num64(b"971448832"),  971448832);
-    assert_eq!(into_num64(b"3758096128"), 3758096128);
+    use crate::into_num;
+
+    assert_eq!(into_num(b"16777216"),   16777216);
+    assert_eq!(into_num(b"971448832"),  971448832);
+    assert_eq!(into_num(b"3758096128"), 3758096128);
 }

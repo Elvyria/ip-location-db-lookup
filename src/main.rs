@@ -215,34 +215,12 @@ fn mask_128(a: &[u8], b: &[u8]) -> u32 {
     }
 }
 
-// a: [u8; 32] = [31, 32, 33, 34, ...]
-// b: [u8; 32] = [0F, 0F, 0F, 0F, ...]
-fn mask_num(b: &[u8]) -> [u8; 32] {
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    const MASK: &[u8] = &[0x0F; 32];
-
-    unsafe {
-        let a = _mm256_loadu_si256(b    as *const _ as *const _);
-        let b = _mm256_loadu_si256(MASK as *const _ as *const _);
-
-        std::mem::transmute(_mm256_and_si256(a, b))
-    }
-}
-
-fn into_num64(b: &[u8]) -> u32 {
+fn into_num(b: &[u8]) -> u32 {
     let mut num = [0u8; 10];
     unsafe { std::ptr::copy_nonoverlapping(b.as_ptr(), num.get_unchecked_mut(10 - b.len()..).as_mut_ptr(), b.len()) }
 
     let mut head: u16 = unsafe { *(num.as_ptr() as *mut u16) };
     let mut tail: u64 = unsafe { *(num[2..].as_ptr() as *mut u64) };
-
-    // masked input
-    // head = head.wrapping_mul((10 << 8) + 1) >> 8;
-    // tail = tail.wrapping_mul((10 << 8) + 1) >> 8;
 
     head = (head & 0x0F0F).wrapping_mul((10 << 8) + 1) >> 8;
 
@@ -251,28 +229,6 @@ fn into_num64(b: &[u8]) -> u32 {
     tail = (tail & 0x0000FFFF0000FFFF).wrapping_mul((10000 << 32) + 1) >> 32;
 
     (head as u32 * 100000000) + tail as u32
-}
-
-// worse than 64 bit tail + head version
-#[cfg(target_pointer_width = "128")]
-fn into_num128(b: &[u8]) -> u32 {
-    let mut num = [0u8; 16];
-
-    let mut num: u128 = unsafe {
-        std::ptr::copy_nonoverlapping(b.as_ptr(), num.get_unchecked_mut(16 - b.len()..).as_mut_ptr(), b.len());
-        *(num.as_ptr() as *mut _)
-    };
-
-    // masked input
-    // num = num.wrapping_mul((10 << 8) + 1) >> 8;
-
-    // unmasked input
-    num = (num & 0x0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F0F).wrapping_mul((10        <<  8) + 1) >>  8;
-    num = (num & 0x00FF00FF00FF00FF00FF00FF00FF00FF).wrapping_mul((100       << 16) + 1) >> 16;
-    num = (num & 0x0000FFFF0000FFFF0000FFFF0000FFFF).wrapping_mul((10000     << 32) + 1) >> 32;
-    num = (num & 0x00000000FFFFFFFF00000000FFFFFFFF).wrapping_mul((100000000 << 64) + 1) >> 64;
-
-    num as u32
 }
 
 fn value(b: &[u8], n: u32) -> Option<&str> {
@@ -284,8 +240,8 @@ fn value(b: &[u8], n: u32) -> Option<&str> {
         let first: usize = 6 + mask.trailing_zeros() as usize;
         let second: usize = first + 1 + (mask >> (first - 5)).trailing_zeros() as usize;
 
-        let min = into_num64(b.get_unchecked(..first));
-        let max = into_num64(b.get_unchecked(first + 1..second));
+        let min = into_num(b.get_unchecked(..first));
+        let max = into_num(b.get_unchecked(first + 1..second));
 
         // do not reorder
         if n > max || min > n {
