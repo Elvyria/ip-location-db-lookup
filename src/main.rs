@@ -230,7 +230,7 @@ fn value(b: &[u8], n: u32) -> Option<&str> {
         let max = u32::from_str(s.get_unchecked(first + 1..second)).unwrap_unchecked();
 
         // do not reorder
-        if min > n || n > max {
+        if n > max || min > n {
             None
         } else {
             Some(s.get_unchecked(second + 1..b.len() - 1))
