@@ -1,5 +1,3 @@
-use crate::Error;
-
 const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 16777472,16778239,CN
 16778240,16779263,AU
@@ -31,23 +29,21 @@ const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 "#;
 
 #[test]
-fn country_ipv4() -> Result<(), Error> {
+fn country_ipv4() {
     use std::net::Ipv4Addr;
     use crate::lookup_ipv4;
 
     let b = IPV4_COUNTRY_NUM.as_bytes();
 
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 0))?, Some("AU"));
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 255))?, Some("AU"));
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 0)), Some("AU"));
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 255)), Some("AU"));
 
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(57, 231, 41, 241))?,  Some("GB"));
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(217, 195, 14, 20))?,  Some("DE"));
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(217, 195, 30, 255))?, Some("FR"));
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(57, 231, 41, 241)),  Some("GB"));
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(217, 195, 14, 20)),  Some("DE"));
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(217, 195, 30, 255)), Some("FR"));
 
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(223, 255, 255, 0))?, Some("AU"));
-    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(223, 255, 255, 255))?, Some("AU"));
-
-    Ok(())
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(223, 255, 255, 0)), Some("AU"));
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(223, 255, 255, 255)), Some("AU"));
 }
 
 #[test]

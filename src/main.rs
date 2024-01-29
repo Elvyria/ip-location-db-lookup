@@ -32,7 +32,7 @@ fn main() -> Result<(), Error> {
     let b: &[u8] = &mmap;
 
     let data = if args.workers == 1 {
-        guess(b, &ip)
+        Ok(guess(b, &ip))
     } else {
         parallel(b, &ip, args.workers)
     }?;
@@ -48,7 +48,7 @@ fn main() -> Result<(), Error> {
     }
 }
 
-fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
+fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
     const MARGIN: usize = 1024 * 1024;
 
     let size = b.len() / 223;
@@ -64,7 +64,7 @@ fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
     tail += find_nl(unsafe { b.get_unchecked(tail..) });
 
     let result = lookup_ipv4(unsafe { b.get_unchecked(head..tail + 1) }, ip);
-    if result.is_ok() { result } else { lookup_ipv4(b, ip) }
+    if result.is_some() { result } else { lookup_ipv4(b, ip) }
 }
 
 fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option<&'a str>, Error> {
@@ -119,7 +119,7 @@ fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
     })
 }
 
-fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
+fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
     let ip_num = ipv4_num(ip);
     let ip_buf = unsafe {
         let mut c = Cursor::new([0u8; 16]);
@@ -129,7 +129,7 @@ fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error>
         c.into_inner()
     };
 
-    Ok(lookup_ipv4_num(b, ip_num, &ip_buf))
+    lookup_ipv4_num(b, ip_num, &ip_buf)
 }
 
 fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Option<&'a str> {
