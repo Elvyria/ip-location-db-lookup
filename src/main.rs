@@ -32,7 +32,7 @@ fn main() -> Result<(), Error> {
     let b: &[u8] = &mmap;
 
     let data = if args.workers == 1 {
-        lookup_ipv4(b, &ip)
+        guess(b, &ip)
     } else {
         parallel(b, &ip, args.workers)
     }?;
@@ -46,6 +46,25 @@ fn main() -> Result<(), Error> {
         },
         None => Err(Error::NotFound),
     }
+}
+
+fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Result<Option<&'a str>, Error> {
+    const MARGIN: usize = 1024 * 1024;
+
+    let size = b.len() / 223;
+    let offset = ip.octets()[0] as usize * size;
+
+    let mut head: usize = offset.saturating_sub(MARGIN);
+    head += if head != 0 {
+        find_nl(unsafe { b.get_unchecked(offset - MARGIN..)} ) + 1
+    }
+    else { 0 };
+
+    let mut tail = (offset + MARGIN).min(b.len());
+    tail += find_nl(unsafe { b.get_unchecked(tail..) });
+
+    let result = lookup_ipv4(unsafe { b.get_unchecked(head..tail + 1) }, ip);
+    if result.is_ok() { result } else { lookup_ipv4(b, ip) }
 }
 
 fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option<&'a str>, Error> {
