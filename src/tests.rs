@@ -58,17 +58,6 @@ fn find_nl() {
 }
 
 #[test]
-fn ipv4_to_num() {
-    use std::net::Ipv4Addr;
-    use crate::ipv4_num;
-
-    assert_eq!(ipv4_num(&Ipv4Addr::new(1, 0, 0, 0)), 16777216);
-    assert_eq!(ipv4_num(&Ipv4Addr::new(2, 16, 90, 0)), 34626048);
-    assert_eq!(ipv4_num(&Ipv4Addr::new(217, 163, 135, 112)), 3651372912);
-    assert_eq!(ipv4_num(&Ipv4Addr::new(223, 255, 255, 255)), 3758096383);
-}
-
-#[test]
 fn str_to_num() {
     use crate::into_num;
 

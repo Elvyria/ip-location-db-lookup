@@ -70,7 +70,7 @@ fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
 fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, mut workers: usize) -> Result<Option<&'a str>, Error> {
     if workers == 0 { workers = std::thread::available_parallelism().map_err(Error::Workers)?.get(); }
 
-    let ip_num = ipv4_num(ip);
+    let ip_num = u32::from_be_bytes(ip.octets());
     let ip_buf = unsafe {
         let mut c = Cursor::new([0u8; 16]);
 
@@ -120,7 +120,7 @@ fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {
 }
 
 fn lookup_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
-    let ip_num = ipv4_num(ip);
+    let ip_num = u32::from_be_bytes(ip.octets());
     let ip_buf = unsafe {
         let mut c = Cursor::new([0u8; 16]);
 
@@ -170,28 +170,6 @@ fn find_nl(b: &[u8]) -> usize {
     }
 
     nl
-}
-
-#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
-fn ipv4_num(ip: &Ipv4Addr) -> u32 {
-
-    #[cfg(target_arch = "x86")]
-    use std::arch::x86::*;
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-
-    let octets = ip.octets().map(u32::from);
-    const MUL: [u32; 4] = [16777216, 65536, 256, 1];
-
-    unsafe {
-        let a = _mm_loadu_si128(&octets as *const _ as *const _);
-        let b = _mm_load_si128(&MUL as *const _ as *const _);
-
-        let mul = _mm_mullo_epi32(a, b);
-        let mul = std::mem::transmute::<_, [u32; 4]>(mul);
-
-        mul.iter().sum()
-    }
 }
 
 // a: [u8; 32] = [1, 2, 3, 4, ...]
