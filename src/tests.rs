@@ -3,6 +3,8 @@ const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 16778240,16779263,AU
 16779264,16781311,CN
 16781312,16785407,JP
+66157568,66163455,US
+661574912,661575167,JP
 971448064,971448319,DE
 971448320,971448575,GB
 971448576,971448831,PL
@@ -38,6 +40,7 @@ fn country_ipv4() {
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 0)), Some("AU"));
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(1, 0, 0, 255)), Some("AU"));
 
+    assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(39, 110, 213, 88)), Some("JP"));
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(57, 231, 41, 241)),  Some("GB"));
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(217, 195, 14, 20)),  Some("DE"));
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(217, 195, 30, 255)), Some("FR"));
