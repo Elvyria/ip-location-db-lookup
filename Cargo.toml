@@ -13,3 +13,10 @@ memmap2 = "0.9"
 
 [profile.dev]
 debug-assertions = false
+
+[dev-dependencies]
+gungraun = "0.17"
+
+[[bench]]
+name = "lookup"
+harness = false
