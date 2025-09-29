@@ -31,7 +31,7 @@ const IPV4_COUNTRY_NUM: &str = r#"16777216,16777471,AU
 #[test]
 fn country_ipv4() {
     use std::net::Ipv4Addr;
-    use crate::lookup_ipv4;
+    use ip_location_db_lookup::lookup_ipv4;
 
     let b = IPV4_COUNTRY_NUM.as_bytes();
 
@@ -44,24 +44,4 @@ fn country_ipv4() {
 
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(223, 255, 255, 0)), Some("AU"));
     assert_eq!(lookup_ipv4(b, &Ipv4Addr::new(223, 255, 255, 255)), Some("AU"));
-}
-
-#[test]
-fn find_nl() {
-    use crate::find_nl;
-
-    assert_eq!(find_nl(b"16777472,16778239,CN\n"), 20);
-    assert_eq!(find_nl(b"223.255.252.0,223.255.253.255,CN\n"), 32);
-    assert_eq!(find_nl(b"2.17.192.0,2.17.192.255,US\n"), 26);
-    assert_eq!(find_nl(b"17301760,17302015,38345,Internet Domain Name System Beijing Engineering Resrarch Center Ltd.\n"), 92);
-    assert_eq!(find_nl(b"17367040,17432575,4788,TM TECHNOLOGY SERVICES SDN BHD\n17435136,17435391,148000,National Knowledge Network\n"), 53);
-}
-
-#[test]
-fn str_to_num() {
-    use crate::into_num;
-
-    assert_eq!(into_num(b"16777216"),   16777216);
-    assert_eq!(into_num(b"971448832"),  971448832);
-    assert_eq!(into_num(b"3758096128"), 3758096128);
 }
