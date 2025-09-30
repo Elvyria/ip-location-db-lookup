@@ -108,6 +108,8 @@ fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Option<&'
 }
 
 fn find_nl(b: &[u8]) -> usize {
+    debug_assert!(!b.is_empty());
+
     const NEWLINES: [u8; 32] = [b'\n'; 32];
 
     let mut nl: usize = 9;
