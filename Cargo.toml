@@ -11,9 +11,6 @@ thiserror = "2.0"
 argh = "0.1"
 memmap2 = "0.9"
 
-[profile.dev]
-debug-assertions = false
-
 [dev-dependencies]
 gungraun = "0.17"
 

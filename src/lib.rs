@@ -111,7 +111,7 @@ fn find_nl(b: &[u8]) -> usize {
     const NEWLINES: [u8; 32] = [b'\n'; 32];
 
     let mut nl: usize = 9;
-    let mut nl_mask: u32 = mask_128(unsafe { b.get_unchecked(nl..nl + 16) }, &NEWLINES[..16]);
+    let mut nl_mask: u32 = mask_128(unsafe { b.get_unchecked(nl..) }, &NEWLINES[..16]);
 
     nl += (nl_mask as u16).trailing_zeros() as usize;
 
@@ -165,7 +165,7 @@ fn mask_128(a: &[u8], b: &[u8]) -> u32 {
 }
 
 fn into_num(b: &[u8]) -> u32 {
-    let mut num = [0u8; 10];
+    let mut num = [0u8; 16];
     unsafe { std::ptr::copy_nonoverlapping(b.as_ptr(), num.get_unchecked_mut(10 - b.len()..).as_mut_ptr(), b.len()) }
 
     let mut head: u16 = unsafe { *(num.as_ptr() as *mut u16) };
@@ -184,7 +184,7 @@ fn value(b: &[u8], n: u32) -> Option<&str> {
     const COMMAS: [u8; 16] = [b','; 16];
 
     unsafe {
-        let mask = mask_128(b.get_unchecked(6..6 + 16), &COMMAS);
+        let mask = mask_128(b.get_unchecked(6..), &COMMAS);
 
         let first: usize = 6 + mask.trailing_zeros() as usize;
         let second: usize = first + 1 + (mask >> (first - 5)).trailing_zeros() as usize;
