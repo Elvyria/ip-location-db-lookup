@@ -93,7 +93,7 @@ fn lookup_ipv4_num<'a>(mut b: &'a [u8], ip_num: u32, ip_buf: &[u8]) -> Option<&'
 
             let nl = find_nl(b);
 
-            if num_mask.trailing_ones() >= best_mask.trailing_ones() || num_mask > best_mask {
+            if num_mask.trailing_zeros() <= best_mask.trailing_zeros()  {
                 best_mask = num_mask;
 
                 let v = value(b.get_unchecked(..=nl), ip_num);
