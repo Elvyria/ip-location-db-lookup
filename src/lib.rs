@@ -14,10 +14,10 @@ pub fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
     }
     else { 0 };
 
-    let mut tail = (offset + MARGIN).min(b.len());
+    let mut tail = (offset + MARGIN).min(b.len() - MARGIN);
     tail += find_nl(unsafe { b.get_unchecked(tail..) });
 
-    let result = lookup_ipv4(unsafe { b.get_unchecked(head..tail + 1) }, ip);
+    let result = lookup_ipv4(unsafe { b.get_unchecked(head..tail) }, ip);
     if result.is_some() { result } else { lookup_ipv4(b, ip) }
 }
 
