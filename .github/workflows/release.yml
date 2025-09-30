@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+\.[0-9]+\.[0-9]+'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [ x86_64-unknown-linux-gnu ]
+    steps:
+      - name: Prepare Environment
+        uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-23.11-small
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          nix-shell .github/shell.nix --argstr target ${{ matrix.target }} --run "
+            cargo build --locked --profile release
+          "
+
+      - name: Find Executable
+        run: |
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec echo binary={} \; -quit >> "$GITHUB_ENV"
+
+      - name: Patch ELF
+        run: |
+          nix-shell .github/shell.nix --argstr target ${{ matrix.target }} --run "
+            patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 ${{ env.binary }}
+            patchelf --remove-rpath ${{ env.binary }}
+          "
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.binary }}
+          if-no-files-found: error
+          overwrite: true
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Package
+        run: |
+          mkdir -p packages
+          for dir in artifacts/*; do
+            tar czf "packages/${dir##*/}.tar.gz" LICENSE -C $dir .
+          done
+
+      - name: Release
+        uses: docker://antonyurchenko/git-release:v6
+        env:
+          DRAFT_RELEASE: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: packages/*.tar.gz
