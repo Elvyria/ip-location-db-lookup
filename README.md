@@ -22,6 +22,11 @@ Options:
   --help            display usage information
 ```
 
+```sh
+alias country="ip-location-db-lookup ${HOME}/databases/dbip-country-ipv4-num.csv ${1}"
+alias city="ip-location-db-lookup ${HOME}/databases/dbip-city-ipv4-num.csv ${1}"
+```
+
 ## Building
 To build this little thing, you'll need some [Rust](https://www.rust-lang.org/).
 
