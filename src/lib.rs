@@ -2,7 +2,21 @@ use std::num::NonZero;
 use std::{net::Ipv4Addr, ops::Range};
 use std::io::{Cursor, Write};
 
-pub fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
+pub fn guess_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
+    match is_valid_ipv4(ip) {
+        true  => unsafe { guess_ipv4_unchecked(b, ip) },
+        false => None
+    }
+}
+
+pub fn parallel_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr, workers: NonZero<usize>) -> Option<&'a str> {
+    match is_valid_ipv4(ip) {
+        true  => unsafe { parallel_ipv4_unchecked(b, ip, workers) },
+        false => None
+    }
+}
+
+unsafe fn guess_ipv4_unchecked<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
     const MARGIN: usize = 1024 * 1024;
 
     let size = b.len() / 223;
@@ -21,7 +35,7 @@ pub fn guess<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
     if result.is_some() { result } else { lookup_ipv4(b, ip) }
 }
 
-pub fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, workers: NonZero<usize>) -> Option<&'a str> {
+unsafe fn parallel_ipv4_unchecked<'a>(b: &'a [u8], ip: &Ipv4Addr, workers: NonZero<usize>) -> Option<&'a str> {
     let ip_num = u32::from_be_bytes(ip.octets());
     let ip_buf = unsafe {
         let mut c = Cursor::new([0u8; 16]);
@@ -48,6 +62,11 @@ pub fn parallel<'a>(b: &'a [u8], ip: &Ipv4Addr, workers: NonZero<usize>) -> Opti
 
         None
     })
+}
+
+fn is_valid_ipv4(ip: &Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    octets[0] > 0 && octets[0] < 224
 }
 
 fn chunks(b: &[u8], workers: usize) -> impl Iterator<Item = Range<usize>> + '_ {

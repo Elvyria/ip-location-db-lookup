@@ -11,7 +11,7 @@ use argh::FromArgs;
 use error::Error;
 use memmap2::Mmap;
 
-use ip_location_db_lookup::{guess, parallel};
+use ip_location_db_lookup::{guess_ipv4, parallel_ipv4};
 
 #[derive(FromArgs)]
 /// Offline IP address lookup tool.
@@ -37,10 +37,10 @@ fn main() -> Result<(), Error> {
     let b: &[u8] = &mmap;
 
     let data = if args.workers == 1 {
-        Ok(guess(b, &ip))
+        Ok(guess_ipv4(b, &ip))
     } else {
         let workers = NonZero::try_from(args.workers).or_else(|_| std::thread::available_parallelism().map_err(Error::Workers))?;
-        Ok(parallel(b, &ip, workers))
+        Ok(parallel_ipv4(b, &ip, workers))
     }?;
 
     match data {
