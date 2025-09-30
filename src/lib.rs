@@ -3,14 +3,14 @@ use std::{net::Ipv4Addr, ops::Range};
 use std::io::{Cursor, Write};
 
 pub fn guess_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr) -> Option<&'a str> {
-    match is_valid_ipv4(ip) {
+    match is_global_ipv4(ip) {
         true  => unsafe { guess_ipv4_unchecked(b, ip) },
         false => None
     }
 }
 
 pub fn parallel_ipv4<'a>(b: &'a [u8], ip: &Ipv4Addr, workers: NonZero<usize>) -> Option<&'a str> {
-    match is_valid_ipv4(ip) {
+    match is_global_ipv4(ip) {
         true  => unsafe { parallel_ipv4_unchecked(b, ip, workers) },
         false => None
     }
@@ -64,7 +64,8 @@ unsafe fn parallel_ipv4_unchecked<'a>(b: &'a [u8], ip: &Ipv4Addr, workers: NonZe
     })
 }
 
-fn is_valid_ipv4(ip: &Ipv4Addr) -> bool {
+// https://github.com/rust-lang/rust/issues/27709
+fn is_global_ipv4(ip: &Ipv4Addr) -> bool {
     let octets = ip.octets();
     octets[0] > 0 && octets[0] < 224
 }
