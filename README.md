@@ -39,6 +39,10 @@ or
 ```
 RUSTFLAGS="-C target-cpu=native" cargo build --locked --release
 ```
+or
+```sh
+make
+```
 
 ## Tested with:
 * [x] [`dbip-country-ipv4-num.csv`](https://github.com/sapics/ip-location-db/blob/main/dbip-country/dbip-country-ipv4-num.csv)
