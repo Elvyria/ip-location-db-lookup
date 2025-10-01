@@ -26,6 +26,12 @@ jobs:
             cargo build --locked --profile release
           "
 
+      - name: Test
+        run: |
+          nix-shell .github/shell.nix --argstr target ${{ matrix.target }} --run "
+            cargo test --no-fail-fast --locked --profile release
+          "
+
       - name: Find Executable
         run: |
           find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec echo binary={} \; -quit >> "$GITHUB_ENV"
